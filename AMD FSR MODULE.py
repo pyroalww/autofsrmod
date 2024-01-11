@@ -6,19 +6,73 @@ from PIL import Image, ImageTk
 import threading
 import time
 from ttkthemes import ThemedTk
-
+import zipfile
+app_version = "V3.2 Linux"
 class Game:
     def __init__(self, name, is_fsr_compatible, default_path):
         self.name = name
         self.is_fsr_compatible = is_fsr_compatible
         self.default_path = default_path
 
+version_mapping = {
+    "0.9.0L*z (220)": "LZ090_220.zip",
+    "0.8.0L*z (220)": "0.8.0lz_220.zip",
+    "0.7.6 L*z (220)": "0.7.6lz_220.zip",
+    "0.7.6 L*z (212)": "0.7.6lz_212.zip",
+    "0.8.1 Nukem9": "081nuke.zip",
+    "0.9.0 Nukem9": "090nuke.zip"
+}
+def informationatstartup():
+    messagebox.showinfo("@c4gwn", "This version developed for Unix based systems. (like decks.)")
 def check_game_compatibility(game):
     print(f"Checking compatibility for {game.name}...")
     time.sleep(1)
     return game.is_fsr_compatible
+def is_mod_installed(game_path):
+    mod_files = [
+        "dlssg_to_fsr3_amd_is_better.dll",
+        "nvngx.dll",
+        "FSR2FSR3.asi",
+        "lfz.sl.dlls.dll",
+        "winmm.dll",
+        "winmm.ini",
+        "fsr2fsr3.config.toml"
+    ]
+
+    for file in mod_files:
+        if not os.path.exists(os.path.join(game_path, file)):
+            return False
+
+    return True
+informationatstartup()
+def update_info_text():
+    selected_game_name = games_combobox.get()
+    selected_game = next((game for game in games if game.name == selected_game_name), None)
+
+    if selected_game:
+        game_path = game_folder_entry.get()
+
+        if not os.path.exists(game_path):
+            info_text.set("The specified folder does not exist.")
+            return
+
+        if is_mod_installed(game_path):
+            info_text.set(f"{selected_game.name}: Mod is already installed.")
+        else:
+            info_text.set(f"{selected_game.name}: Mod is not installed.")
+    else:
+        info_text.set("Select a Game")
+
+def browse_folder():
+    initial_path = "C:/Program Files (x86)/Steam/steamapps/common"
+    folder_selected = filedialog.askdirectory(initialdir=initial_path)
+    game_folder_entry.delete(0, tk.END)
+    game_folder_entry.insert(0, folder_selected)
+    update_info_text()
 
 def enable_amd_fsr_simulation(progress_var, progress_label, progress_bar, activation_button, game_path, inject_gpu_plugin):
+    selected_version = version_combobox.get()
+
     def update_progress():
         nonlocal activation_button
         progress_label.config(text=activation_steps[progress_var.get()])
@@ -34,14 +88,14 @@ def enable_amd_fsr_simulation(progress_var, progress_label, progress_bar, activa
             progress_var.set(0)
             progress_bar["value"] = 0
 
-            # Open Instagram link after activation
             os.system("start https://instagram.com/c4gwn")
 
     try:
         activation_steps = [
-            "Step 1: Backup original files",
-            "Step 2: Copy FSR files to game directory",
-            "Step 3: Inject GPU Plugin" if inject_gpu_plugin else "Step 3: Finish"
+            " Backup original files",
+            f" Extracting files for {selected_version}",
+            f" Step 3: Copy FSR files to game directory {game_path}",
+            " Inject GPU Plugin" if inject_gpu_plugin else " Finish"
         ]
 
         progress_var.set(0)
@@ -56,26 +110,51 @@ def enable_amd_fsr_simulation(progress_var, progress_label, progress_bar, activa
 
         root.after(2000, update_progress)
 
-        fsr_files = [
-            "FSR2FSR3.asi",
-            "lfz.sl.dlss.dll",
-            "winmm.dll",
-            "winmm.ini"
-        ]
+        cleaned_version = "".join(c if c.isalnum() or c == '.' else '_' for c in selected_version)
+        zip_filename = version_mapping.get(selected_version)
 
-        for file in fsr_files:
-            source_path = os.path.join(os.getcwd(), file)
-            destination_path = os.path.join(game_path, file)
-            shutil.copy2(source_path, destination_path)
+        if zip_filename:
+            zip_path = os.path.join(os.getcwd(), zip_filename)
+
+            # Yeni çıkartma işlemi
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(game_path)
+
+            files_to_move = [
+                "dlssg_to_fsr3_amd_is_better.dll",
+                "nvngx.dll",
+                "FSR2FSR3.asi",
+                "lfz.sl.dlls.dll",
+                "winmm.dll",
+                "winmm.ini",
+                "fsr2fsr3.config.toml"
+            ]
+
+            for file in files_to_move:
+                source_path = os.path.join(game_path, file)
+                destination_path = os.path.join(game_path, file)
+
+                if os.path.exists(destination_path):
+                    os.remove(destination_path)  # Eğer varsa, önceki dosyayı sil
+
+                shutil.move(source_path, destination_path)
 
         if inject_gpu_plugin:
             gpu_config_file = "fsr2fsr3.config.toml"
-            source_gpu_config_path = os.path.join(os.getcwd(), gpu_config_file)
             destination_gpu_config_path = os.path.join(game_path, gpu_config_file)
-            shutil.copy2(source_gpu_config_path, destination_gpu_config_path)
+
+            os.remove(destination_gpu_config_path)  # Eğer varsa, önceki dosyayı sil
 
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred during the activation process: {e}")
+
+        # Debug çıktısı ekleyelim
+        print("Debug Information:")
+        print(f"selected_version: {selected_version}")
+        print(f"zip_filename: {zip_filename}")
+        print(f"zip_path: {zip_path}")
+        print(f"game_path: {game_path}")
+
     finally:
         activation_button.config(state=tk.NORMAL)
         progress_label.config(text="")
@@ -84,11 +163,13 @@ def enable_amd_fsr_simulation(progress_var, progress_label, progress_bar, activa
 
 def remove_fsr_mod(game_path):
     fsr_files = [
+        "dlssg_to_fsr3_amd_is_better.dll",
+        "nvngx.dll",
         "FSR2FSR3.asi",
         "lfz.sl.dlss.dll",
         "winmm.dll",
         "winmm.ini",
-        "fsr2fsr3.config.toml",
+        "fsr2fsr3.config.toml"
     ]
 
     for file in fsr_files:
@@ -96,11 +177,12 @@ def remove_fsr_mod(game_path):
         if os.path.exists(file_path):
             os.remove(file_path)
 
-def browse_folder():
-    initial_path = "C:/Program Files (x86)/Steam/steamapps/common"  # Başlangıç konumu
-    folder_selected = filedialog.askdirectory(initialdir=initial_path)
-    game_folder_entry.delete(0, tk.END)
-    game_folder_entry.insert(0, folder_selected)
+    if inject_gpu_plugin_var.get():
+        gpu_config_file = "fsr2fsr3.config.toml"
+        gpu_config_path = os.path.join(game_path, gpu_config_file)
+        if os.path.exists(gpu_config_path):
+            os.remove(gpu_config_path)
+
 
 
 def simulate_amd_fsr():
@@ -121,12 +203,28 @@ def simulate_amd_fsr():
             if check_game_compatibility(selected_game):
                 messagebox.showinfo("Compatibility", f"{selected_game.name} is compatible with AMD FSR.")
                 activation_button.config(state=tk.DISABLED)
-                inject_gpu_plugin_var.set(True)  # Auto-check the "Inject GPU Plugin" checkbox
-                threading.Thread(target=enable_amd_fsr_simulation, args=(progress_var, progress_label, progress_bar, activation_button, game_path, inject_gpu_plugin_var.get())).start()
+                inject_gpu_plugin_var.set(True)  # GPU inject otomatik işaretleme
+                threading.Thread(target=enable_amd_fsr_simulation,
+                                 args=(progress_var, progress_label, progress_bar, activation_button, game_path,
+                                       inject_gpu_plugin_var.get())).start()
+
+                check_installed_mods(game_path)
             else:
                 messagebox.showwarning("Compatibility", f"{selected_game.name} is not compatible with AMD FSR.")
         else:
             messagebox.showerror("Game Error", "Invalid game selection.")
+
+def check_installed_mods(game_path):
+    mod_installed_message = ""
+
+    if os.path.exists(os.path.join(game_path, "dlssg_to_fsr3_amd_is_better.dll")):
+        mod_installed_message = "Nukem9 Mod installed"
+    elif os.path.exists(os.path.join(game_path, "FSR2FSR3.asi")):
+        mod_installed_message = "L*z Mod installed"
+    else:
+        mod_installed_message = "Mods are not yet downloaded."
+
+    messagebox.showinfo("Installed Mods", mod_installed_message)
 
 def remove_fsr_mod_button():
     selected_game_name = games_combobox.get()
@@ -148,17 +246,15 @@ def remove_fsr_mod_button():
             if answer:
                 remove_fsr_mod(game_path)
 
-# ThemedTk provides a more modern look for the GUI
-root = ThemedTk(theme="arc")  # You can experiment with other available themes
-root.title("AMD FSR Enabler Simulator")
-
+root = ThemedTk(theme="arc")
+root.title("Auto FSR3 Mod Installer")
+info1 = "Do not worry about WinError2. Its just a bug :)"
 # Load FSR logo
-fsr_logo_path = "FSR.JPG"  # Replace with the actual path to the FSR logo
+fsr_logo_path = "FSR.JPG"
 fsr_logo = Image.open(fsr_logo_path)
 fsr_logo = fsr_logo.resize((200, 100), Image.ANTIALIAS)
 fsr_logo = ImageTk.PhotoImage(fsr_logo)
 
-# Simulate a list of games with their compatibility
 games = [
     Game("Select a Game", False, ""),
     Game("The Last Of Us Part I", True, "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Last Of Us Part I"),
@@ -170,17 +266,16 @@ games = [
     Game("Dying Light 2", True, ""),
     Game("Alan Wake 2", True, ""),
     Game("Ready or Not", True, ""),
+    Game("Other Game [Not guaranteed]", True, "")
 ]
 
-# GUI elements
 fsr_logo_label = ttk.Label(root, image=fsr_logo)
 fsr_logo_label.grid(row=0, column=0, padx=10, pady=10, columnspan=3)
 
-# New label for "Developed by" text
 developed_by_label = ttk.Label(root, text="Developed by @c4gwn", font=("Helvetica", 8), foreground="gray")
 developed_by_label.grid(row=0, column=2, padx=10, pady=10, sticky="e")
 
-games_combobox = ttk.Combobox(root, values=[game.name for game in games], state="readonly")
+games_combobox = ttk.Combobox(root, values=[game.name for game in games], state="readonly", postcommand=update_info_text)
 games_combobox.current(0)
 games_combobox.grid(row=1, column=0, padx=10, pady=10, columnspan=3)
 
@@ -193,21 +288,37 @@ game_folder_entry.grid(row=2, column=1, padx=10, pady=10, sticky="w")
 browse_button = ttk.Button(root, text="Browse", command=browse_folder)
 browse_button.grid(row=2, column=2, padx=10, pady=10)
 
+version_label = ttk.Label(root, text="Select Version:")
+version_label.grid(row=3, column=0, padx=10, pady=10, sticky="e")
+
+version_combobox = ttk.Combobox(root, values=[version for version in version_mapping.keys()], state="readonly")
+version_combobox.current(0)
+version_combobox.grid(row=3, column=1, padx=10, pady=10, sticky="w", columnspan=2)
+
 inject_gpu_plugin_var = tk.BooleanVar()
 inject_gpu_plugin_checkbox = ttk.Checkbutton(root, text="Inject GPU Plugin", variable=inject_gpu_plugin_var)
-inject_gpu_plugin_checkbox.grid(row=3, column=0, padx=10, pady=10, columnspan=3)
+inject_gpu_plugin_checkbox.grid(row=4, column=0, padx=10, pady=10, columnspan=3)
 
-activation_button = ttk.Button(root, text="Activate AMD FSR3", command=simulate_amd_fsr)
-activation_button.grid(row=4, column=0, padx=10, pady=10, columnspan=3)
+activation_button = ttk.Button(root, text="Install AMD FSR3", command=simulate_amd_fsr)
+activation_button.grid(row=5, column=0, padx=10, pady=10, columnspan=3)
 
 remove_fsr_mod_button = ttk.Button(root, text="Remove FSR Mod", command=remove_fsr_mod_button)
-remove_fsr_mod_button.grid(row=5, column=0, padx=10, pady=10, columnspan=3)
+remove_fsr_mod_button.grid(row=6, column=0, padx=10, pady=10, columnspan=3)
 
 progress_var = tk.IntVar()
 progress_label = ttk.Label(root, text="")
-progress_label.grid(row=6, column=0, padx=10, pady=10, columnspan=3)
+progress_label.grid(row=7, column=0, padx=10, pady=10, columnspan=3)
 
 progress_bar = ttk.Progressbar(root, mode="determinate", length=300)
-progress_bar.grid(row=7, column=0, padx=10, pady=10, columnspan=3)
+progress_bar.grid(row=8, column=0, padx=10, pady=10, columnspan=3)
+
+info_text = tk.StringVar()
+info_label = ttk.Label(root, textvariable=info_text, font=("Helvetica", 10), foreground="blue")
+info_label.grid(row=9, column=0, padx=10, pady=10, columnspan=3)
+version_label = ttk.Label(root, text=f"Version: {app_version}", font=("Helvetica", 12), foreground="green")
+version_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+info1 = tk.StringVar()
+info_label1 = ttk.Label(root, textvariable=info1, font=("Helvetica", 10), foreground="blue")
+info_label1.grid(row=11, column=0, padx=12, pady=11, columnspan=4)
 
 root.mainloop()
